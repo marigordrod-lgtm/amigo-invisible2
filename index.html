@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Amigo Invisible Secreto</title>
+  <style>
+    body { font-family: sans-serif; max-width: 500px; margin: 40px auto; padding: 20px; background: #f4f4f9; text-align: center; }
+    h1 { color: #d32f2f; }
+    textarea { width: 100%; height: 140px; padding: 10px; box-sizing: border-box; margin-bottom: 10px; font-size: 16px; border-radius: 8px; border: 1px solid #ccc; }
+    button { background: #2e7d32; color: white; border: none; padding: 14px; width: 100%; font-size: 16px; cursor: pointer; border-radius: 8px; font-weight: bold; }
+    button:hover { background: #1b5e20; }
+    .fila { background: white; padding: 12px; margin: 10px 0; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+    .nombre { font-weight: bold; font-size: 16px; text-align: left; flex-grow: 1; }
+    .btn-wa { background: #25D366; color: white; text-decoration: none; padding: 8px 12px; border-radius: 5px; font-size: 14px; font-weight: bold; }
+    .btn-copiar { background: #1976d2; color: white; border: none; padding: 8px 12px; border-radius: 5px; font-size: 14px; cursor: pointer; font-weight: bold; width: auto; }
+    .caja-secreta { background: white; padding: 30px 20px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); margin-top: 20px; }
+    .resultado-final { font-size: 28px; color: #d32f2f; font-weight: bold; margin: 20px 0; padding: 15px; background: #ffebee; border-radius: 8px; }
+    .oculto { display: none; }
+  </style>
+</head>
+<body>
+
+  <!-- VISTA PARA QUIEN ABRE EL ENLACE -->
+  <div id="vista-participante" class="oculto">
+    <h1>🎁 Amigo Invisible</h1>
+    <div class="caja-secreta">
+      <h2 id="saludo-participante">¡Hola!</h2>
+      <p>Pulsa el botón para descubrir a quién te ha tocado regalar:</p>
+      <button id="btn-descubrir" onclick="revelar()">🎲 Hacer mi sorteo</button>
+      <div id="texto-revelado" class="resultado-final oculto"></div>
+    </div>
+  </div>
+
+  <!-- VISTA PARA EL ORGANIZADOR -->
+  <div id="vista-organizador">
+    <h1>🎁 Crear Amigo Invisible</h1>
+    <p>Escribe los nombres de los participantes (uno por línea):</p>
+    <textarea id="nombres" placeholder="Unai&#10;Isa&#10;Maribel&#10;Juan"></textarea>
+    <button onclick="generarEnlaces()">Generar Enlaces Secretos</button>
+    <div id="lista-enlaces" style="margin-top: 20px;"></div>
+  </div>
+
+  <script>
+    // Comprobar si la página se abrió desde un enlace secreto
+    const parametros = new URLSearchParams(window.location.search);
+    const codigoSecreto = parametros.get("s");
+
+    if (codigoSecreto) {
+      document.getElementById("vista-organizador").classList.add("oculto");
+      document.getElementById("vista-participante").classList.remove("oculto");
+      
+      try {
+        const datos = JSON.parse(decodeURIComponent(escape(atob(codigoSecreto))));
+        document.getElementById("saludo-participante").textContent = "¡Hola " + datos.de + "!";
+        window.amigoSecreto = datos.para;
+      } catch (e) {
+        document.getElementById("saludo-participante").textContent = "Enlace no válido";
+      }
+    }
+
+    function revelar() {
+      const btn = document.getElementById("btn-descubrir");
+      const caja = document.getElementById("texto-revelado");
+      btn.disabled = true;
+      btn.textContent = "Sorteando...";
+      
+      setTimeout(function() {
+        btn.classList.add("oculto");
+        caja.textContent = "🎉 Te ha tocado: " + window.amigoSecreto;
+        caja.classList.remove("oculto");
+      }, 1200);
+    }
+
+    function generarEnlaces() {
+      if (window.location.protocol === "file:") {
+        alert("Aviso: Estás abriendo el archivo desde tu ordenador. Para que tus amigos puedan abrir los enlaces en su móvil, primero debes subir este archivo a internet (por ejemplo en Tiiny.host o Netlify Drop).");
+      }
+
+      const texto = document.getElementById("nombres").value.trim();
+      const saltoLinea = String.fromCharCode(10);
+      const participantes = texto.split(saltoLinea).map(function(n) { return n.trim(); }).filter(function(n) { return n !== ""; });
+
+      if (participantes.length < 3) {
+        alert("Escribe al menos 3 nombres.");
+        return;
+      }
+
+      let mezclados = participantes.slice();
+      for (let i = mezclados.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        const temp = mezclados[i];
+        mezclados[i] = mezclados[j];
+        mezclados[j] = temp;
+      }
+
+      const contenedor = document.getElementById("lista-enlaces");
+      contenedor.innerHTML = "<h3>Envía su enlace secreto a cada uno:</h3>";
+      const urlBase = window.location.href.split("?")[0];
+
+      for (let i = 0; i < mezclados.length; i++) {
+        const quienRegala = mezclados[i];
+        const aQuienRegala = mezclados[(i + 1) % mezclados.length];
+        
+        const objeto = JSON.stringify({ de: quienRegala, para: aQuienRegala });
+        const cifrado = btoa(unescape(encodeURIComponent(objeto)));
+        const enlaceUnico = urlBase + "?s=" + cifrado;
+        const mensajeWA = "¡Hola " + quienRegala + "! Entra en tu enlace secreto para hacer el sorteo del Amigo Invisible: " + enlaceUnico;
+
+        const fila = document.createElement("div");
+        fila.className = "fila";
+
+        const nombre = document.createElement("span");
+        nombre.className = "nombre";
+        nombre.textContent = quienRegala;
+
+        const btnWa = document.createElement("a");
+        btnWa.href = "https://whatsapp.com" + encodeURIComponent(mensajeWA);
+        btnWa.target = "_blank";
+        btnWa.className = "btn-wa";
+        btnWa.textContent = "WhatsApp";
+
+        const btnCopiar = document.createElement("button");
+        btnCopiar.className = "btn-copiar";
+        btnCopiar.textContent = "Copiar enlace";
+        btnCopiar.onclick = function() {
+          navigator.clipboard.writeText(mensajeWA);
+          btnCopiar.textContent = "¡Copiado!";
+          btnCopiar.style.background = "#555";
+        };
+
+        fila.appendChild(nombre);
+        fila.appendChild(btnWa);
+        fila.appendChild(btnCopiar);
+        contenedor.appendChild(fila);
+      }
+    }
+  </script>
+
+</body>
+</html>
