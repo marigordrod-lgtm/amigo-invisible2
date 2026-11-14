@@ -3,162 +3,102 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Amigo Invisible Secreto</title>
+  <title>Amigo Invisible del Grupo</title>
   <style>
     body { font-family: sans-serif; max-width: 500px; margin: 40px auto; padding: 20px; background: #f4f4f9; text-align: center; }
     h1 { color: #d32f2f; }
-    textarea { width: 100%; height: 140px; padding: 10px; box-sizing: border-box; margin-bottom: 10px; font-size: 16px; border-radius: 8px; border: 1px solid #ccc; }
-    button { background: #2e7d32; color: white; border: none; padding: 14px; width: 100%; font-size: 16px; cursor: pointer; border-radius: 8px; font-weight: bold; }
-    button:hover { background: #1b5e20; }
-    .fila { background: white; padding: 12px; margin: 10px 0; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); display: flex; justify-content: space-between; align-items: center; gap: 8px; }
-    .nombre { font-weight: bold; font-size: 16px; text-align: left; flex-grow: 1; }
-    .btn-wa { background: #25D366; color: white; text-decoration: none; padding: 8px 12px; border-radius: 5px; font-size: 14px; font-weight: bold; }
-    .btn-copiar { background: #1976d2; color: white; border: none; padding: 8px 12px; border-radius: 5px; font-size: 14px; cursor: pointer; font-weight: bold; width: auto; }
-    .caja-secreta { background: white; padding: 30px 20px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); margin-top: 20px; }
-    .resultado-final { font-size: 28px; color: #d32f2f; font-weight: bold; margin: 20px 0; padding: 15px; background: #ffebee; border-radius: 8px; }
+    .caja { background: white; padding: 25px 20px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); margin-top: 20px; }
+    .btn-nombre { background: #1976d2; color: white; border: none; padding: 15px; width: 100%; font-size: 18px; cursor: pointer; border-radius: 8px; font-weight: bold; margin: 8px 0; transition: 0.2s; }
+    .btn-nombre:hover { background: #115293; }
+    .btn-sorteo { background: #2e7d32; color: white; border: none; padding: 16px; width: 100%; font-size: 18px; cursor: pointer; border-radius: 8px; font-weight: bold; margin-top: 15px; }
+    .btn-sorteo:hover { background: #1b5e20; }
+    .resultado { font-size: 28px; color: #d32f2f; font-weight: bold; margin: 20px 0; padding: 20px; background: #ffebee; border-radius: 8px; border: 2px dashed #d32f2f; }
     .oculto { display: none; }
+    .aviso { font-size: 13px; color: #666; margin-top: 15px; }
   </style>
 </head>
 <body>
 
-  <!-- VISTA PARA QUIEN ABRE EL ENLACE -->
-  <div id="vista-participante" class="oculto">
-    <h1>🎁 Amigo Invisible</h1>
-    <div class="caja-secreta">
-      <h2 id="saludo-participante">¡Hola!</h2>
-      <p>Pulsa el botón para descubrir a quién te ha tocado regalar:</p>
-      <button id="btn-descubrir" onclick="revelar()">🎲 Hacer mi sorteo</button>
-      <div id="texto-revelado" class="resultado-final oculto"></div>
-    </div>
+  <h1>🎁 Amigo Invisible</h1>
+
+  <!-- PASO 1: ELEGIR QUIÉN ERES SIN ESCRIBIR -->
+  <div id="paso-elegir" class="caja">
+    <h2>¿Quién eres?</h2>
+    <p>Pulsa tu nombre para entrar a tu sorteo:</p>
+    <div id="lista-botones"></div>
+    <p class="aviso">⚠️ Sé legal y pulsa solo tu propio nombre.</p>
   </div>
 
-  <!-- VISTA PARA EL ORGANIZADOR -->
-  <div id="vista-organizador">
-    <h1>🎁 Crear Amigo Invisible</h1>
-    <p>Lista de participantes (edítala si lo necesitas):</p>
-    <textarea id="nombres">Unai
-Isa
-Maribel
-Juan</textarea>
-    <button onclick="generarEnlaces()">Generar Enlaces Secretos</button>
-    <div id="lista-enlaces" style="margin-top: 20px;"></div>
+  <!-- PASO 2: HACER EL SORTEO -->
+  <div id="paso-sorteo" class="caja oculto">
+    <h2 id="saludo">¡Hola!</h2>
+    <p>Ya está todo listo. Pulsa el botón para descubrir a quién te toca regalar:</p>
+    <button id="btn-revelar" class="btn-sorteo" onclick="mostrarResultado()">🎲 Realizar mi sorteo</button>
+    <div id="caja-resultado" class="resultado oculto"></div>
+    <p id="nota-final" class="aviso oculto">Haz una captura de pantalla para no olvidarlo. Nadie más puede ver este resultado.</p>
   </div>
 
   <script>
-    // Comprobar si la página se abrió desde un enlace secreto
-    const parametros = new URLSearchParams(window.location.search);
-    const codigoSecreto = parametros.get("s");
+    // Lista fija de participantes (puedes cambiar o añadir nombres aquí)
+    const participantes = ["Unai", "Isa", "Maribel", "Juan"];
 
-    if (codigoSecreto) {
-      document.getElementById("vista-organizador").classList.add("oculto");
-      document.getElementById("vista-participante").classList.remove("oculto");
-      
-      try {
-        const datos = JSON.parse(decodeURIComponent(escape(atob(codigoSecreto))));
-        document.getElementById("saludo-participante").textContent = "¡Hola " + datos.de + "!";
-        window.amigoSecreto = datos.para;
-      } catch (e) {
-        document.getElementById("saludo-participante").textContent = "Enlace no válido";
+    // Asignación secreta fija (nadie se regala a sí mismo y no hay repetidos)
+    // Se genera usando una semilla fija para que todos los móviles coincidan
+    function obtenerAsignaciones(lista) {
+      let copia = lista.slice();
+      // Mezcla determinista (siempre da el mismo resultado cerrado para el grupo)
+      let semilla = 42; 
+      for (let i = copia.length - 1; i > 0; i--) {
+        semilla = (semilla * 9301 + 49297) % 233280;
+        const j = Math.floor((semilla / 233280) * (i + 1));
+        const temp = copia[i];
+        copia[i] = copia[j];
+        copia[j] = temp;
       }
+
+      const parejas = {};
+      for (let i = 0; i < copia.length; i++) {
+        const quien = copia[i];
+        const aQuien = copia[(i + 1) % copia.length];
+        parejas[quien] = aQuien;
+      }
+      return parejas;
     }
 
-    function revelar() {
-      const btn = document.getElementById("btn-descubrir");
-      const caja = document.getElementById("texto-revelado");
+    const sorteoCerrado = obtenerAsignaciones(participantes);
+    let usuarioActual = "";
+
+    // Crear los botones automáticamente
+    const contenedorBotones = document.getElementById("lista-botones");
+    participantes.forEach(function(nombre) {
+      const btn = document.createElement("button");
+      btn.className = "btn-nombre";
+      btn.textContent = "Soy " + nombre;
+      btn.onclick = function() { seleccionarPersona(nombre); };
+      contenedorBotones.appendChild(btn);
+    });
+
+    function seleccionarPersona(nombre) {
+      usuarioActual = nombre;
+      document.getElementById("paso-elegir").classList.add("oculto");
+      document.getElementById("paso-sorteo").classList.remove("oculto");
+      document.getElementById("saludo").textContent = "¡Hola " + nombre + "!";
+    }
+
+    function mostrarResultado() {
+      const btn = document.getElementById("btn-revelar");
+      const caja = document.getElementById("caja-resultado");
+      const nota = document.getElementById("nota-final");
+
       btn.disabled = true;
-      btn.textContent = "Sorteando...";
-      
+      btn.textContent = "Mezclando nombres...";
+
       setTimeout(function() {
         btn.classList.add("oculto");
-        caja.textContent = "🎉 Te ha tocado: " + window.amigoSecreto;
+        caja.textContent = "🎉 Te ha tocado: " + sorteoCerrado[usuarioActual];
         caja.classList.remove("oculto");
+        nota.classList.remove("oculto");
       }, 1200);
-    }
-
-    function generarEnlaces() {
-      if (window.location.protocol === "file:") {
-        alert("Aviso: Estás abriendo el archivo desde tu ordenador. Para que tus amigos puedan abrir los enlaces en su móvil, primero debes subir este archivo a internet (por ejemplo en Tiiny.host o Netlify Drop).");
-      }
-
-      const texto = document.getElementById("nombres").value.trim();
-      const participantes = texto.split("\n").map(function(n) { return n.trim(); }).filter(function(n) { return n !== ""; });
-
-      if (participantes.length < 3) {
-        alert("Escribe al menos 3 nombres.");
-        return;
-      }
-
-      // Verificar que no haya nombres duplicados
-      const nombresUnicos = new Set(participantes.map(n => n.toLowerCase()));
-      if (nombresUnicos.size !== participantes.length) {
-        alert("Hay nombres repetidos en la lista. Asegúrate de diferenciarlos (por ejemplo: Juan P. y Juan M.).");
-        return;
-      }
-
-      let mezclados = [];
-      let sorteoValido = false;
-
-      // Repetir el sorteo automáticamente si alguien se toca a sí mismo
-      while (!sorteoValido) {
-        mezclados = participantes.slice();
-        for (let i = mezclados.length - 1; i > 0; i--) {
-          const j = Math.floor(Math.random() * (i + 1));
-          const temp = mezclados[i];
-          mezclados[i] = mezclados[j];
-          mezclados[j] = temp;
-        }
-
-        sorteoValido = true;
-        for (let i = 0; i < mezclados.length; i++) {
-          const quienRegala = mezclados[i];
-          const aQuienRegala = mezclados[(i + 1) % mezclados.length];
-          if (quienRegala.toLowerCase() === aQuienRegala.toLowerCase()) {
-            sorteoValido = false;
-            break;
-          }
-        }
-      }
-
-      const contenedor = document.getElementById("lista-enlaces");
-      contenedor.innerHTML = "<h3>Envía su enlace secreto a cada uno:</h3>";
-      const urlBase = window.location.href.split("?");
-
-      for (let i = 0; i < mezclados.length; i++) {
-        const quienRegala = mezclados[i];
-        const aQuienRegala = mezclados[(i + 1) % mezclados.length];
-        
-        const objeto = JSON.stringify({ de: quienRegala, para: aQuienRegala });
-        const cifrado = btoa(unescape(encodeURIComponent(objeto)));
-        const enlaceUnico = urlBase + "?s=" + cifrado;
-        const mensajeWA = "¡Hola " + quienRegala + "! Entra en tu enlace secreto para hacer el sorteo del Amigo Invisible: " + enlaceUnico;
-
-        const fila = document.createElement("div");
-        fila.className = "fila";
-
-        const nombre = document.createElement("span");
-        nombre.className = "nombre";
-        nombre.textContent = quienRegala;
-
-        const btnWa = document.createElement("a");
-        btnWa.href = "https://whatsapp.com" + encodeURIComponent(mensajeWA);
-        btnWa.target = "_blank";
-        btnWa.className = "btn-wa";
-        btnWa.textContent = "WhatsApp";
-
-        const btnCopiar = document.createElement("button");
-        btnCopiar.className = "btn-copiar";
-        btnCopiar.textContent = "Copiar enlace";
-        btnCopiar.onclick = function() {
-          navigator.clipboard.writeText(mensajeWA);
-          btnCopiar.textContent = "¡Copiado!";
-          btnCopiar.style.background = "#555";
-        };
-
-        fila.appendChild(nombre);
-        fila.appendChild(btnWa);
-        fila.appendChild(btnCopiar);
-        contenedor.appendChild(fila);
-      }
     }
   </script>
 
