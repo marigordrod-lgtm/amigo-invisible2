@@ -35,8 +35,11 @@
   <!-- VISTA PARA EL ORGANIZADOR -->
   <div id="vista-organizador">
     <h1>🎁 Crear Amigo Invisible</h1>
-    <p>Escribe los nombres de los participantes (uno por línea):</p>
-    <textarea id="nombres" placeholder="Unai&#10;Isa&#10;Maribel&#10;Juan"></textarea>
+    <p>Lista de participantes (edítala si lo necesitas):</p>
+    <textarea id="nombres">Unai
+Isa
+Maribel
+Juan</textarea>
     <button onclick="generarEnlaces()">Generar Enlaces Secretos</button>
     <div id="lista-enlaces" style="margin-top: 20px;"></div>
   </div>
@@ -78,25 +81,47 @@
       }
 
       const texto = document.getElementById("nombres").value.trim();
-      const saltoLinea = String.fromCharCode(10);
-      const participantes = texto.split(saltoLinea).map(function(n) { return n.trim(); }).filter(function(n) { return n !== ""; });
+      const participantes = texto.split("\n").map(function(n) { return n.trim(); }).filter(function(n) { return n !== ""; });
 
       if (participantes.length < 3) {
         alert("Escribe al menos 3 nombres.");
         return;
       }
 
-      let mezclados = participantes.slice();
-      for (let i = mezclados.length - 1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1));
-        const temp = mezclados[i];
-        mezclados[i] = mezclados[j];
-        mezclados[j] = temp;
+      // Verificar que no haya nombres duplicados
+      const nombresUnicos = new Set(participantes.map(n => n.toLowerCase()));
+      if (nombresUnicos.size !== participantes.length) {
+        alert("Hay nombres repetidos en la lista. Asegúrate de diferenciarlos (por ejemplo: Juan P. y Juan M.).");
+        return;
+      }
+
+      let mezclados = [];
+      let sorteoValido = false;
+
+      // Repetir el sorteo automáticamente si alguien se toca a sí mismo
+      while (!sorteoValido) {
+        mezclados = participantes.slice();
+        for (let i = mezclados.length - 1; i > 0; i--) {
+          const j = Math.floor(Math.random() * (i + 1));
+          const temp = mezclados[i];
+          mezclados[i] = mezclados[j];
+          mezclados[j] = temp;
+        }
+
+        sorteoValido = true;
+        for (let i = 0; i < mezclados.length; i++) {
+          const quienRegala = mezclados[i];
+          const aQuienRegala = mezclados[(i + 1) % mezclados.length];
+          if (quienRegala.toLowerCase() === aQuienRegala.toLowerCase()) {
+            sorteoValido = false;
+            break;
+          }
+        }
       }
 
       const contenedor = document.getElementById("lista-enlaces");
       contenedor.innerHTML = "<h3>Envía su enlace secreto a cada uno:</h3>";
-      const urlBase = window.location.href.split("?")[0];
+      const urlBase = window.location.href.split("?");
 
       for (let i = 0; i < mezclados.length; i++) {
         const quienRegala = mezclados[i];
@@ -139,3 +164,4 @@
 
 </body>
 </html>
+  
