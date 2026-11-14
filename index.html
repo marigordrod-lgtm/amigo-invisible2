@@ -1,107 +1,173 @@
+html
 <!DOCTYPE html>
 <html lang="es">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Amigo Invisible del Grupo</title>
+  <title>Amigo Invisible Secreto</title>
   <style>
     body { font-family: sans-serif; max-width: 500px; margin: 40px auto; padding: 20px; background: #f4f4f9; text-align: center; }
     h1 { color: #d32f2f; }
-    .caja { background: white; padding: 25px 20px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); margin-top: 20px; }
-    .btn-nombre { background: #1976d2; color: white; border: none; padding: 15px; width: 100%; font-size: 18px; cursor: pointer; border-radius: 8px; font-weight: bold; margin: 8px 0; transition: 0.2s; }
-    .btn-nombre:hover { background: #115293; }
-    .btn-sorteo { background: #2e7d32; color: white; border: none; padding: 16px; width: 100%; font-size: 18px; cursor: pointer; border-radius: 8px; font-weight: bold; margin-top: 15px; }
+    .caja { background: white; padding: 30px 20px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); margin-top: 20px; }
+    .btn-sorteo { background: #2e7d32; color: white; border: none; padding: 18px; width: 100%; font-size: 20px; cursor: pointer; border-radius: 8px; font-weight: bold; }
     .btn-sorteo:hover { background: #1b5e20; }
-    .resultado { font-size: 28px; color: #d32f2f; font-weight: bold; margin: 20px 0; padding: 20px; background: #ffebee; border-radius: 8px; border: 2px dashed #d32f2f; }
+    .btn-sorteo:disabled { background: #999; cursor: not-allowed; }
+    .btn-repetir { background: #f57c00; color: white; border: none; padding: 14px; width: 100%; font-size: 16px; cursor: pointer; border-radius: 8px; font-weight: bold; margin-top: 15px; }
+    .btn-repetir:hover { background: #e65100; }
+    .resultado { font-size: 30px; color: #d32f2f; font-weight: bold; margin: 20px 0; padding: 20px; background: #ffebee; border-radius: 8px; border: 2px dashed #d32f2f; }
     .oculto { display: none; }
-    .aviso { font-size: 13px; color: #666; margin-top: 15px; }
+    .aviso { font-size: 14px; color: #555; margin-top: 15px; line-height: 1.4; }
   </style>
 </head>
 <body>
 
   <h1>🎁 Amigo Invisible</h1>
 
-  <!-- PASO 1: ELEGIR QUIÉN ERES SIN ESCRIBIR -->
-  <div id="paso-elegir" class="caja">
-    <h2>¿Quién eres?</h2>
-    <p>Pulsa tu nombre para entrar a tu sorteo:</p>
-    <div id="lista-botones"></div>
-    <p class="aviso">⚠️ Sé legal y pulsa solo tu propio nombre.</p>
-  </div>
-
-  <!-- PASO 2: HACER EL SORTEO -->
-  <div id="paso-sorteo" class="caja oculto">
-    <h2 id="saludo">¡Hola!</h2>
-    <p>Ya está todo listo. Pulsa el botón para descubrir a quién te toca regalar:</p>
-    <button id="btn-revelar" class="btn-sorteo" onclick="mostrarResultado()">🎲 Realizar mi sorteo</button>
+  <div class="caja">
+    <p id="mensaje-estado">Pulsa el botón para sacar tu papelito de la bolsa:</p>
+    
+    <button id="btn-sacar" class="btn-sorteo" onclick="sacarPapelito()">🎲 Hacer mi sorteo</button>
+    
     <div id="caja-resultado" class="resultado oculto"></div>
-    <p id="nota-final" class="aviso oculto">Haz una captura de pantalla para no olvidarlo. Nadie más puede ver este resultado.</p>
+    
+    <button id="btn-repetir" class="btn-repetir oculto" onclick="repetirPorAutoregalo()">🔄 ¡Soy yo! Devolver y repetir</button>
+    
+    <p id="nota-final" class="aviso oculto">Este nombre ya ha sido eliminado de la bolsa para los demás. ¡Haz captura para no olvidarlo!</p>
   </div>
 
   <script>
-    // Lista fija de participantes (puedes cambiar o añadir nombres aquí)
+    // 1. LISTA DE PARTICIPANTES
     const participantes = ["Unai", "Isa", "Maribel", "Juan", "Nieves", "Luisa"];
+    
+    // 2. NOMBRE ÚNICO DE VUESTRA BOLSA (cámbialo si haces otro sorteo nuevo)
+    const ID_BOLSA = "sorteo-unai-isa-2026-x99";
+    const URL_SERVIDOR = "https://ntfy.sh" + ID_BOLSA;
+    const CLAVE_LOCAL = "mi_amigo_" + ID_BOLSA;
 
-    // Asignación secreta fija (nadie se regala a sí mismo y no hay repetidos)
-    // Se genera usando una semilla fija para que todos los móviles coincidan
-    function obtenerAsignaciones(lista) {
-      let copia = lista.slice();
-      // Mezcla determinista (siempre da el mismo resultado cerrado para el grupo)
-      let semilla = 42; 
-      for (let i = copia.length - 1; i > 0; i--) {
-        semilla = (semilla * 9301 + 49297) % 233280;
-        const j = Math.floor((semilla / 233280) * (i + 1));
-        const temp = copia[i];
-        copia[i] = copia[j];
-        copia[j] = temp;
-      }
+    let nombreActualSacado = "";
 
-      const parejas = {};
-      for (let i = 0; i < copia.length; i++) {
-        const quien = copia[i];
-        const aQuien = copia[(i + 1) % copia.length];
-        parejas[quien] = aQuien;
+    // Al cargar la página, comprobar si este móvil ya sacó su papelito
+    window.onload = function() {
+      const guardado = localStorage.getItem(CLAVE_LOCAL);
+      if (guardado) {
+        nombreActualSacado = guardado;
+        mostrarPantallaResultado(guardado);
       }
-      return parejas;
+    };
+
+    // Leer en internet qué nombres ya han salido en otros móviles
+    async function obtenerNombresUsados() {
+      try {
+        const respuesta = await fetch(URL_SERVIDOR + "/json?poll=1&since=all");
+        const texto = await respuesta.text();
+        if (!texto.trim()) return [];
+
+        const lineas = texto.trim().split("\n");
+        const usados = new Set();
+
+        lineas.forEach(function(linea) {
+          const evento = JSON.parse(linea);
+          if (evento.message) {
+            if (evento.message.startsWith("USADO:")) {
+              usados.add(evento.message.replace("USADO:", "").trim());
+            } else if (evento.message.startsWith("LIBERADO:")) {
+              usados.delete(evento.message.replace("LIBERADO:", "").trim());
+            }
+          }
+        });
+        return Array.from(usados);
+      } catch (e) {
+        return [];
+      }
     }
 
-    const sorteoCerrado = obtenerAsignaciones(participantes);
-    let usuarioActual = "";
-
-    // Crear los botones automáticamente
-    const contenedorBotones = document.getElementById("lista-botones");
-    participantes.forEach(function(nombre) {
-      const btn = document.createElement("button");
-      btn.className = "btn-nombre";
-      btn.textContent = "Soy " + nombre;
-      btn.onclick = function() { seleccionarPersona(nombre); };
-      contenedorBotones.appendChild(btn);
-    });
-
-    function seleccionarPersona(nombre) {
-      usuarioActual = nombre;
-      document.getElementById("paso-elegir").classList.add("oculto");
-      document.getElementById("paso-sorteo").classList.remove("oculto");
-      document.getElementById("saludo").textContent = "¡Hola " + nombre + "!";
+    // Guardar en internet que un nombre ya está cogido o liberado
+    async function registrarEnServidor(accion, nombre) {
+      await fetch(URL_SERVIDOR, {
+        method: "POST",
+        body: accion + ":" + nombre
+      });
     }
 
-    function mostrarResultado() {
-      const btn = document.getElementById("btn-revelar");
-      const caja = document.getElementById("caja-resultado");
-      const nota = document.getElementById("nota-final");
-
+    async function sacarPapelito() {
+      const btn = document.getElementById("btn-sacar");
       btn.disabled = true;
-      btn.textContent = "Mezclando nombres...";
+      btn.textContent = "Buscando en la bolsa...";
 
-      setTimeout(function() {
+      const usados = await obtenerNombresUsados();
+      
+      // Filtrar los nombres que aún quedan libres
+      const disponibles = participantes.filter(function(p) {
+        return !usados.includes(p);
+      });
+
+      if (disponibles.length === 0) {
+        document.getElementById("mensaje-estado").textContent = "🎉 ¡Ya se han repartido todos los nombres del sorteo!";
         btn.classList.add("oculto");
-        caja.textContent = "🎉 Te ha tocado: " + sorteoCerrado[usuarioActual];
-        caja.classList.remove("oculto");
-        nota.classList.remove("oculto");
-      }, 1200);
+        return;
+      }
+
+      // Elegir uno al azar entre los disponibles
+      const indiceAzar = Math.floor(Math.random() * disponibles.length);
+      const elegido = disponibles[indiceAzar];
+
+      // Bloquearlo en internet y en este móvil
+      await registrarEnServidor("USADO", elegido);
+      localStorage.setItem(CLAVE_LOCAL, elegido);
+      nombreActualSacado = elegido;
+
+      mostrarPantallaResultado(elegido);
+    }
+
+    async function repetirPorAutoregalo() {
+      const btnRepetir = document.getElementById("btn-repetir");
+      btnRepetir.disabled = true;
+      btnRepetir.textContent = "Devolviendo tu nombre y sorteando otro...";
+
+      const nombreADevolver = nombreActualSacado;
+
+      // 1. Consultar los libres ANTES de devolver el nuestro para no volver a sacarnos
+      const usados = await obtenerNombresUsados();
+      const otrosDisponibles = participantes.filter(function(p) {
+        return !usados.includes(p) && p !== nombreADevolver;
+      });
+
+      if (otrosDisponibles.length === 0) {
+        alert("Solo quedaba tu nombre en la bolsa. Avisa al grupo para reiniciar el sorteo.");
+        btnRepetir.disabled = false;
+        btnRepetir.textContent = "🔄 ¡Soy yo! Devolver y repetir";
+        return;
+      }
+
+      // 2. Sacar uno de los otros disponibles
+      const indiceAzar = Math.floor(Math.random() * otrosDisponibles.length);
+      const nuevoElegido = otrosDisponibles[indiceAzar];
+
+      // 3. Registrar el nuevo como USADO y liberar el nuestro
+      await registrarEnServidor("USADO", nuevoElegido);
+      await registrarEnServidor("LIBERADO", nombreADevolver);
+
+      localStorage.setItem(CLAVE_LOCAL, nuevoElegido);
+      nombreActualSacado = nuevoElegido;
+
+      btnRepetir.disabled = false;
+      btnRepetir.textContent = "🔄 ¡Soy yo! Devolver y repetir";
+      mostrarPantallaResultado(nuevoElegido);
+    }
+
+    function mostrarPantallaResultado(nombre) {
+      document.getElementById("mensaje-estado").textContent = "Tu amigo invisible es:";
+      document.getElementById("btn-sacar").classList.add("oculto");
+      
+      const caja = document.getElementById("caja-resultado");
+      caja.textContent = "🎉 " + nombre;
+      caja.classList.remove("oculto");
+
+      document.getElementById("btn-repetir").classList.remove("oculto");
+      document.getElementById("nota-final").classList.remove("oculto");
     }
   </script>
 
 </body>
 </html>
-  
+
