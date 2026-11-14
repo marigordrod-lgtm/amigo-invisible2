@@ -38,14 +38,14 @@
     // 1. LISTA DE PARTICIPANTES
     const participantes = ["Unai", "Isa", "Maribel", "Juan", "Nieves", "Luisa"];
     
-    // 2. NOMBRE ÚNICO DE VUESTRA BOLSA (cámbialo si haces otro sorteo nuevo)
-    const ID_BOLSA = "sorteo-unai-isa-2026-x99";
-    const URL_SERVIDOR = "https://ntfy.sh" + ID_BOLSA;
+    // 2. CLAVE ÚNICA DE VUESTRA BOLSA (cambia el número final si quieres reiniciar el sorteo)
+    const ID_BOLSA = "bolsa_unai_isa_2026_v1";
+    const URL_MEMORIA = "https://kvdb.io" + ID_BOLSA;
     const CLAVE_LOCAL = "mi_amigo_" + ID_BOLSA;
 
     let nombreActualSacado = "";
 
-    // Al cargar la página, comprobar si este móvil ya sacó su papelito
+    // Al cargar, comprobar si este móvil ya sacó su papelito
     window.onload = function() {
       const guardado = localStorage.getItem(CLAVE_LOCAL);
       if (guardado) {
@@ -54,104 +54,103 @@
       }
     };
 
-    // Leer en internet qué nombres ya han salido en otros móviles
-    async function obtenerNombresUsados() {
+    // Leer qué nombres quedan en la bolsa compartida
+    async function leerBolsa() {
       try {
-        const respuesta = await fetch(URL_SERVIDOR + "/json?poll=1&since=all");
-        const texto = await respuesta.text();
-        if (!texto.trim()) return [];
-
-        const lineas = texto.trim().split("\n");
-        const usados = new Set();
-
-        lineas.forEach(function(linea) {
-          const evento = JSON.parse(linea);
-          if (evento.message) {
-            if (evento.message.startsWith("USADO:")) {
-              usados.add(evento.message.replace("USADO:", "").trim());
-            } else if (evento.message.startsWith("LIBERADO:")) {
-              usados.delete(evento.message.replace("LIBERADO:", "").trim());
-            }
-          }
-        });
-        return Array.from(usados);
+        const res = await fetch(URL_MEMORIA + "?t=" + Date.now());
+        if (res.status === 404) {
+          // Si la bolsa aún no existe, devolvemos todos los participantes
+          return participantes.slice();
+        }
+        if (!res.ok) throw new Error("Error de conexión");
+        const datos = await res.json();
+        return Array.isArray(datos) ? datos : participantes.slice();
       } catch (e) {
-        return [];
+        throw e;
       }
     }
 
-    // Guardar en internet que un nombre ya está cogido o liberado
-    async function registrarEnServidor(accion, nombre) {
-      await fetch(URL_SERVIDOR, {
+    // Guardar la lista actualizada de nombres libres en la bolsa
+    async function guardarBolsa(listaRestante) {
+      const res = await fetch(URL_MEMORIA, {
         method: "POST",
-        body: accion + ":" + nombre
+        body: JSON.stringify(listaRestante)
       });
+      if (!res.ok) throw new Error("No se pudo guardar");
     }
 
     async function sacarPapelito() {
       const btn = document.getElementById("btn-sacar");
       btn.disabled = true;
-      btn.textContent = "Buscando en la bolsa...";
+      btn.textContent = "Abriendo la bolsa...";
 
-      const usados = await obtenerNombresUsados();
-      
-      // Filtrar los nombres que aún quedan libres
-      const disponibles = participantes.filter(function(p) {
-        return !usados.includes(p);
-      });
+      try {
+        const disponibles = await leerBolsa();
 
-      if (disponibles.length === 0) {
-        document.getElementById("mensaje-estado").textContent = "🎉 ¡Ya se han repartido todos los nombres del sorteo!";
-        btn.classList.add("oculto");
-        return;
+        if (disponibles.length === 0) {
+          document.getElementById("mensaje-estado").textContent = "🎉 ¡Ya se han repartido todos los nombres del sorteo!";
+          btn.classList.add("oculto");
+          return;
+        }
+
+        // Elegir uno al azar
+        const indiceAzar = Math.floor(Math.random() * disponibles.length);
+        const elegido = disponibles[indiceAzar];
+
+        // Quitar el nombre elegido de la lista y guardarla en internet
+        const nuevaLista = disponibles.filter(function(n) { return n !== elegido; });
+        await guardarBolsa(nuevaLista);
+
+        // Guardar en el móvil del usuario
+        localStorage.setItem(CLAVE_LOCAL, elegido);
+        nombreActualSacado = elegido;
+
+        mostrarPantallaResultado(elegido);
+      } catch (error) {
+        alert("Hubo un problema de conexión. Inténtalo de nuevo.");
+        btn.disabled = false;
+        btn.textContent = "🎲 Hacer mi sorteo";
       }
-
-      // Elegir uno al azar entre los disponibles
-      const indiceAzar = Math.floor(Math.random() * disponibles.length);
-      const elegido = disponibles[indiceAzar];
-
-      // Bloquearlo en internet y en este móvil
-      await registrarEnServidor("USADO", elegido);
-      localStorage.setItem(CLAVE_LOCAL, elegido);
-      nombreActualSacado = elegido;
-
-      mostrarPantallaResultado(elegido);
     }
 
     async function repetirPorAutoregalo() {
       const btnRepetir = document.getElementById("btn-repetir");
       btnRepetir.disabled = true;
-      btnRepetir.textContent = "Devolviendo tu nombre y sorteando otro...";
+      btnRepetir.textContent = "Devolviendo y sacando otro...";
 
       const nombreADevolver = nombreActualSacado;
 
-      // 1. Consultar los libres ANTES de devolver el nuestro para no volver a sacarnos
-      const usados = await obtenerNombresUsados();
-      const otrosDisponibles = participantes.filter(function(p) {
-        return !usados.includes(p) && p !== nombreADevolver;
-      });
+      try {
+        const disponibles = await leerBolsa();
 
-      if (otrosDisponibles.length === 0) {
-        alert("Solo quedaba tu nombre en la bolsa. Avisa al grupo para reiniciar el sorteo.");
+        if (disponibles.length === 0) {
+          alert("Solo quedaba tu nombre en la bolsa. Avisa al grupo para reiniciar el sorteo.");
+          btnRepetir.disabled = false;
+          btnRepetir.textContent = "🔄 ¡Soy yo! Devolver y repetir";
+          return;
+        }
+
+        // Elegir otro distinto entre los que quedan libres
+        const indiceAzar = Math.floor(Math.random() * disponibles.length);
+        const nuevoElegido = disponibles[indiceAzar];
+
+        // Quitar el nuevo elegido y volver a meter nuestro propio nombre
+        const nuevaLista = disponibles.filter(function(n) { return n !== nuevoElegido; });
+        nuevaLista.push(nombreADevolver);
+
+        await guardarBolsa(nuevaLista);
+
+        localStorage.setItem(CLAVE_LOCAL, nuevoElegido);
+        nombreActualSacado = nuevoElegido;
+
         btnRepetir.disabled = false;
         btnRepetir.textContent = "🔄 ¡Soy yo! Devolver y repetir";
-        return;
+        mostrarPantallaResultado(nuevoElegido);
+      } catch (error) {
+        alert("Error de conexión al repetir. Pulsa otra vez.");
+        btnRepetir.disabled = false;
+        btnRepetir.textContent = "🔄 ¡Soy yo! Devolver y repetir";
       }
-
-      // 2. Sacar uno de los otros disponibles
-      const indiceAzar = Math.floor(Math.random() * otrosDisponibles.length);
-      const nuevoElegido = otrosDisponibles[indiceAzar];
-
-      // 3. Registrar el nuevo como USADO y liberar el nuestro
-      await registrarEnServidor("USADO", nuevoElegido);
-      await registrarEnServidor("LIBERADO", nombreADevolver);
-
-      localStorage.setItem(CLAVE_LOCAL, nuevoElegido);
-      nombreActualSacado = nuevoElegido;
-
-      btnRepetir.disabled = false;
-      btnRepetir.textContent = "🔄 ¡Soy yo! Devolver y repetir";
-      mostrarPantallaResultado(nuevoElegido);
     }
 
     function mostrarPantallaResultado(nombre) {
@@ -169,4 +168,5 @@
 
 </body>
 </html>
+Usa el código con precaución.
 
